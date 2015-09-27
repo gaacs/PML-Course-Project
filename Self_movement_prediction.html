@@ -153,7 +153,8 @@ testData &lt;-<span class="st"> </span>trainCleaned[-inTrain, ]</code></pre>
 <h1>Modeling</h1>
 <p>For predictive activity recognition a model will be fitted using <strong>Random Forest</strong> algorithm.</p>
 <p>Random Forests are a combination of tree predictors where each tree depends on the values of a random vector sampled independently with the same distribution for all trees in the forest. The basic principle is that a group of “weak learners” can come together to form a “strong learner”. Random Forests are a great tool for making predictions considering they do not overfit because of the law of large numbers. Introducing the right kind of randomness makes them accurate classifiers and regressors.</p>
-<p>When applying the algorithm <strong>5-fold cross validation</strong> will be use.</p>
+<p>When applying the algorithm <strong>5-fold cross-validation</strong> will be use.</p>
+<p>Cross-validation, sometimes called rotation estimation, is a model validation technique for assessing how the results of a statistical analysis will generalize to an independent data set. It is mainly used in settings where the goal is prediction, and one wants to estimate how accurately a predictive model will perform in practice.</p>
 <pre class="sourceCode r"><code class="sourceCode r">controlRf &lt;-<span class="st"> </span><span class="kw">trainControl</span>(<span class="dt">method=</span><span class="st">&quot;cv&quot;</span>, <span class="dv">5</span>)
 modelRf &lt;-<span class="st"> </span><span class="kw">train</span>(classe ~<span class="st"> </span>., <span class="dt">data=</span>trainData, <span class="dt">method=</span><span class="st">&quot;rf&quot;</span>, <span class="dt">trControl=</span>controlRf, <span class="dt">ntree=</span><span class="dv">250</span>)
 modelRf</code></pre>
