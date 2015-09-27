@@ -1,0 +1,154 @@
+---
+title: "Self movement prediction"
+author: "Adrián Álvarez del Castillo"
+date: "September 25, 2015"
+output: 
+  html_document: 
+    fig_height: 3
+    fig_width: 5
+    highlight: tango
+    theme: cerulean
+    toc: yes
+---
+***
+```
+This is a R Markdown document.
+```
+# Introduction  
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement – a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it.
+
+In this project, we will use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants to predict the manner in which they did the exercise.  
+
+# Data preprocessing
+First step is to load the requiered packages.
+```{r}
+library(knitr)
+library(caret)
+library(rpart)
+library(rpart.plot)
+library(randomForest)
+library(corrplot)
+```
+
+```{r, include=FALSE}
+knitr::opts_chunk$set(fig.path = "Figs/", fig.align = "center", cache=T)
+knit_hooks$set(inline = function(x) {prettyNum(x, big.mark = ",")})
+```
+
+**Download the Data**  
+The information provided for the analysis is dowloaded from the web.
+```{r}
+# Define URL and file names
+trainUrl <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+testUrl <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+trainFile <- "./data/pml-training.csv"
+testFile  <- "./data/pml-testing.csv"
+
+# Check existance of the local target directory
+if (!file.exists("./data")) {dir.create("./data")}
+
+# Download files
+if (!file.exists(trainFile))
+        {download.file(trainUrl, destfile=trainFile, method="curl")}
+if (!file.exists(testFile))
+        {download.file(testUrl, destfile=testFile, method="curl")}
+```  
+
+**Read the Data**  
+Once the data has been downloaded, it is posible to read it into from the csv files into a couple of data frames.
+```{r}
+trainRaw <- read.csv("./data/pml-training.csv")
+testRaw <- read.csv("./data/pml-testing.csv")
+```
+The training data set contains `r nrow(trainRaw)` observations and `r ncol(trainRaw)` variables, while the testing data set contains `r nrow(testRaw)` observations and `r ncol(testRaw)` variables. The "classe" variable in the training set is the outcome to predict. 
+```{r}
+barplot(table(trainRaw$classe), xlab = "Classe", col = "steelblue")
+```
+
+**Clean the data**  
+In this step the data will be cleaned by removing the variables with exclusively missing values.
+```{r}
+trainCleaned <- trainRaw[, colSums(is.na(trainRaw)) == 0] 
+testCleaned <- testRaw[, colSums(is.na(testRaw)) == 0] 
+```  
+Next, all non-numeric variables and variables related to timestamps will be removed.
+```{r}
+classe <- trainCleaned$classe
+trainRemove <- grepl("^X|timestamp|window", names(trainCleaned))
+trainCleaned <- trainCleaned[, !trainRemove]
+trainCleaned <- trainCleaned[, sapply(trainCleaned, is.numeric)]
+trainCleaned$classe <- classe
+testRemove <- grepl("^X|timestamp|window", names(testCleaned))
+testCleaned <- testCleaned[, !testRemove]
+testCleaned <- testCleaned[, sapply(testCleaned, is.numeric)]
+```
+After the data cleansing, the training data set contains `r nrow(trainCleaned)` observations and `r ncol(trainCleaned)` variables. The target variable (Classe) is retained in the cleaned train data set.
+
+**Slice the data**  
+For model training purposes the cleaned data set will be partitioned in two, one for training with 60% of observations and one for validation with 40% of observations. The validation data set will be use to conduct cross validation.  
+```{r}
+set.seed(1970) # For reproducibile purpose
+inTrain <- createDataPartition(trainCleaned$classe, p=0.60, list=F)
+trainData <- trainCleaned[inTrain, ]
+testData <- trainCleaned[-inTrain, ]
+```
+# Modeling
+For predictive activity recognition a model will be fitted using **Random Forest** algorithm.  
+
+Random Forests are a combination of tree predictors where each tree depends on the values of a random vector sampled independently with the same distribution for all trees in the forest. The basic principle is that a group of “weak learners” can come together to form a “strong learner”. Random Forests are a great tool for making predictions considering they do not overfit because of the law of large numbers. Introducing the right kind of randomness makes them accurate classifiers and regressors.  
+
+When applying the algorithm **5-fold cross validation** will be use.
+```{r}
+controlRf <- trainControl(method="cv", 5)
+modelRf <- train(classe ~ ., data=trainData, method="rf", trControl=controlRf, ntree=250)
+modelRf
+```
+The performance of the model on the validation data set is estimated with the predict function.
+```{r}
+predictRf <- predict(modelRf, testData)
+confusionMatrix(testData$classe, predictRf)
+```
+
+```{r}
+accuracy <- postResample(predictRf, testData$classe)
+accuracy
+ose <- 1 - as.numeric(confusionMatrix(testData$classe, predictRf)$overall[1])
+```
+The estimated out-of-sample error is `r round(ose*100,3)`%.
+
+# Predicting test cases
+The fitted model is applied to the provided testing cases obtained from the data source.
+```{r}
+result <- predict(modelRf, testCleaned[, -length(names(testCleaned))])
+result
+```  
+The required files are generated for later submission.
+```{r}
+pml_write_files <- function(x){
+        n = length(x)
+        for(i in 1:n){
+                filename = paste0("problem_results/problem_id_",i,".txt")
+                write.table(x[i], file=filename, quote=FALSE,
+                            row.names=FALSE, col.names=FALSE)
+                }
+        }
+pml_write_files(result)
+```
+
+# Appendix: Figures
+**Correlation Matrix Visualization**
+```{r, fig.width=12, fig.height=12}
+corrPlot <- cor(trainData[, -length(names(trainData))])
+corrplot(corrPlot, method="color")
+```
+
+**Variable importance**
+```{r, fig.width=12, fig.height=12}
+plot(varImp(modelRf, scale=F), cex=1.5, col="steelblue")
+```
+
+**Decision Tree Visualization**
+```{r, fig.width=12, fig.height=12}
+treeModel <- rpart(classe ~ ., data=trainData, method="class")
+prp(treeModel)
+```
